@@ -1,0 +1,250 @@
+// ============================================================
+// Gym Control Pro - Sistema de Gestión Progress Club
+// Modelo de datos - Prisma Schema (PostgreSQL)
+// Versión: 2 · Última actualización: 06/09/2026
+// ============================================================
+
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+// ------------------------------------------------------------
+// ENUMS
+// ------------------------------------------------------------
+
+enum RolUsuario {
+  ADMIN
+  PROFESOR
+}
+
+enum EstadoSocio {
+  ACTIVO
+  INACTIVO
+}
+
+enum EstadoCuota {
+  VIGENTE
+  VENCIDO
+  PROXIMO_A_VENCER
+}
+
+enum MedioPago {
+  FISICO
+  DIGITAL
+}
+
+enum FrecuenciaPago {
+  DIARIO
+  SEMANAL
+  QUINCENAL
+  MENSUAL
+}
+
+enum EstadoPago {
+  VALIDO
+  ANULADO
+}
+
+enum TipoMovimientoCaja {
+  INGRESO
+  EGRESO
+  TRANSFERENCIA
+}
+
+enum OrigenDinero {
+  CAJA_OPERATIVA
+  EFECTIVO_GUARDADO
+  DIGITAL
+}
+
+// ------------------------------------------------------------
+// USUARIO (CU-SIS-01, CU-SIS-02, CU-SIS-03)
+// ------------------------------------------------------------
+model Usuario {
+  id            Int        @id @default(autoincrement())
+  nombre        String
+  email         String     @unique
+  passwordHash  String     @map("password_hash")
+  rol           RolUsuario
+  activo        Boolean    @default(true)
+  createdAt     DateTime   @default(now()) @map("created_at")
+  updatedAt     DateTime   @updatedAt @map("updated_at")
+
+  // Relaciones - trazabilidad: quién hizo qué
+  sociosCreados   Socio[]          @relation("SocioCreadoPor")
+  ingresos        Ingreso[]
+  pagos           Pago[]
+  movimientosCaja MovimientoCaja[]
+  cierresCaja     CierreCaja[]
+
+  @@map("usuarios")
+}
+
+// ------------------------------------------------------------
+// SOCIO (CU-SOC-01 a 06)
+// ------------------------------------------------------------
+model Socio {
+  id        Int         @id @default(autoincrement())
+  nombre    String
+  apellido  String
+  documento String      @unique
+  fechaNacimiento DateTime @map("fecha_nacimiento")
+  telefono  String?
+  email     String?
+  fechaAlta DateTime    @default(now()) @map("fecha_alta")
+  estado    EstadoSocio @default(ACTIVO)
+
+  // Apto físico (CU-SOC-05) - se reemplaza al actualizarse, sin historial
+  aptoFechaPresentacion DateTime? @map("apto_fecha_presentacion")
+  aptoFechaVencimiento  DateTime? @map("apto_fecha_vencimiento")
+
+  // Cache de vigencia de cuota - se recalcula en cada Pago/Anulación (RF 5.2, RF 5.4)
+  // Evita recalcular sobre todo el historial de pagos en cada consulta/ingreso.
+  fechaVencimientoCuota DateTime? @map("fecha_vencimiento_cuota")
+
+  // Cache de la frecuencia del último pago válido - necesario para calcular "próximo a
+  // vencer" (RF 5.5), que depende de la frecuencia (distinto umbral de días según sea
+  // semanal/quincenal/mensual). Se actualiza junto con fechaVencimientoCuota, mismo lugar
+  // en el código (ver Notas Técnicas #1).
+  ultimaFrecuenciaPago FrecuenciaPago? @map("ultima_frecuencia_pago")
+
+  creadoPorId Int      @map("creado_por_id")
+  creadoPor   Usuario  @relation("SocioCreadoPor", fields: [creadoPorId], references: [id])
+
+  createdAt DateTime @default(now()) @map("created_at")
+  updatedAt DateTime @updatedAt @map("updated_at")
+
+  ingresos Ingreso[]
+  pagos    Pago[]
+
+  @@map("socios")
+}
+
+// ------------------------------------------------------------
+// INGRESO (CU-ING-01, CU-ING-02)
+// ------------------------------------------------------------
+model Ingreso {
+  id        Int      @id @default(autoincrement())
+  socioId   Int      @map("socio_id")
+  socio     Socio    @relation(fields: [socioId], references: [id])
+  fechaHora DateTime @default(now()) @map("fecha_hora")
+
+  // Usuario con sesión iniciada al momento del ingreso (Admin o Profesor)
+  usuarioId Int     @map("usuario_id")
+  usuario   Usuario @relation(fields: [usuarioId], references: [id])
+
+  // "Foto" del estado en el momento exacto del ingreso — se calcula UNA VEZ al crear
+  // el registro y queda congelada (a diferencia del estado "al vuelo" que se recalcula
+  // siempre contra la fecha de hoy). Sirve para poder responder después preguntas como
+  // "¿cuántas veces vino este socio con la cuota vencida?", algo que el estado actual
+  // por sí solo no puede reconstruir.
+  estadoSocioAlIngresar EstadoSocio @map("estado_socio_al_ingresar")
+  estadoCuotaAlIngresar EstadoCuota @map("estado_cuota_al_ingresar")
+
+  createdAt DateTime @default(now()) @map("created_at")
+
+  @@index([socioId])
+  @@index([fechaHora])
+  @@map("ingresos")
+}
+
+// ------------------------------------------------------------
+// PAGO (CU-PAG-01, CU-PAG-02, CU-PAG-03)
+// ------------------------------------------------------------
+model Pago {
+  id      Int   @id @default(autoincrement())
+  socioId Int   @map("socio_id")
+  socio   Socio @relation(fields: [socioId], references: [id])
+
+  fechaPago DateTime @map("fecha_pago")
+  monto     Int      // monto en pesos, sin decimales
+  medioPago MedioPago @map("medio_pago")
+  frecuencia FrecuenciaPago
+
+  // Calculada según reglas RF 5.2 / RF 5.3
+  fechaVencimientoGenerada DateTime @map("fecha_vencimiento_generada")
+
+  estado             EstadoPago @default(VALIDO)
+  // Autogenerado por el backend, formato PAG-AAAA-#### (ej: PAG-2026-0001)
+  numeroComprobante  String     @unique @map("numero_comprobante")
+
+  // Únicamente el Administrador registra pagos (confirmado)
+  usuarioId Int     @map("usuario_id")
+  usuario   Usuario @relation(fields: [usuarioId], references: [id])
+
+  createdAt DateTime @default(now()) @map("created_at")
+
+  // Relación 1:1 con el movimiento de caja generado automáticamente (CU-CAJ-01)
+  movimientoCaja MovimientoCaja?
+
+  @@index([socioId])
+  @@index([fechaPago])
+  @@map("pagos")
+}
+
+// ------------------------------------------------------------
+// MOVIMIENTO DE CAJA (CU-CAJ-01, 02, 03, 04, 05, 06, 07)
+// ------------------------------------------------------------
+model MovimientoCaja {
+  id     Int                @id @default(autoincrement())
+  tipo   TipoMovimientoCaja
+  fecha  DateTime           @default(now())
+  monto  Decimal            @db.Decimal(10, 2)
+
+  medioPago MedioPago? @map("medio_pago") // no aplica a transferencias
+  concepto  String
+  categoria String?    // solo egresos (alquiler, servicios, retiro, etc.)
+
+  origen  OrigenDinero
+  destino OrigenDinero? // solo transferencias internas
+
+  numeroComprobante String? @map("numero_comprobante")
+
+  // Si el movimiento fue generado automáticamente por un pago de cuota
+  pagoId Int?  @unique @map("pago_id")
+  pago   Pago? @relation(fields: [pagoId], references: [id])
+
+  usuarioId Int     @map("usuario_id")
+  usuario   Usuario @relation(fields: [usuarioId], references: [id])
+
+  anulado Boolean @default(false)
+
+  // Se asigna cuando el movimiento queda incluido en un cierre diario (CU-CAJ-04)
+  cierreId Int?        @map("cierre_id")
+  cierre   CierreCaja? @relation(fields: [cierreId], references: [id])
+
+  createdAt DateTime @default(now()) @map("created_at")
+
+  @@index([fecha])
+  @@index([tipo])
+  @@map("movimientos_caja")
+}
+
+// ------------------------------------------------------------
+// CIERRE DE CAJA (CU-CAJ-04)
+// ------------------------------------------------------------
+model CierreCaja {
+  id    Int      @id @default(autoincrement())
+  fecha DateTime @unique @db.Date
+
+  usuarioId Int     @map("usuario_id")
+  usuario   Usuario @relation(fields: [usuarioId], references: [id])
+
+  totalIngresos          Decimal @db.Decimal(10, 2) @map("total_ingresos")
+  totalEgresos           Decimal @db.Decimal(10, 2) @map("total_egresos")
+  resultadoNeto          Decimal @db.Decimal(10, 2) @map("resultado_neto")
+  saldoCajaOperativa     Decimal @db.Decimal(10, 2) @map("saldo_caja_operativa")
+  saldoEfectivoGuardado  Decimal @db.Decimal(10, 2) @map("saldo_efectivo_guardado")
+  saldoDigital           Decimal @db.Decimal(10, 2) @map("saldo_digital")
+
+  createdAt DateTime @default(now()) @map("created_at")
+
+  movimientos MovimientoCaja[]
+
+  @@map("cierres_caja")
+}
