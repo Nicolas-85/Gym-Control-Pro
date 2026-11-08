@@ -7,9 +7,90 @@
   <script src="https://cdn.tailwindcss.com"></script>
 </head>
 <body class="bg-gray-100 flex items-center justify-center min-h-screen">
-  <div class="bg-white p-8 rounded shadow-md w-full max-w-sm">
-    <h1 class="text-2xl font-bold mb-4 text-center">Gym Control Pro</h1>
-    <p class="text-sm text-gray-600 text-center mb-6">Progress Club</p>
+
+  <div class="bg-white p-8 rounded-lg shadow-md w-full max-w-sm">
+    <h1 class="text-2xl font-bold text-center text-gray-800">Gym Control Pro</h1>
+    <p class="text-sm text-gray-500 text-center mb-6">Progress Club</p>
+
+    <div id="alert-box" class="hidden mb-4 p-3 rounded text-sm text-center"></div>
+
+    <form id="login-form" class="space-y-4">
+      <div>
+        <label for="email" class="block text-xs font-semibold text-gray-600 uppercase mb-1">Correo Electrónico</label>
+        <input 
+          type="email" 
+          id="email" 
+          required 
+          placeholder="admin@gymcontrol.com"
+          class="w-full px-3 py-2 border border-gray-300 rounded focus:outline-none focus:ring-2 focus:ring-blue-500"
+        >
+      </div>
+
+      <div>
+        <label for="password" class="block text-xs font-semibold text-gray-600 uppercase mb-1">Contraseña</label>
+        <input 
+          type="password" 
+          id="password" 
+          required 
+          placeholder="••••••••"
+          class="w-full px-3 py-2 border border-gray-300 rounded focus:outline-none focus:ring-2 focus:ring-blue-500"
+        >
+      </div>
+
+      <button 
+        type="submit" 
+        id="submit-btn"
+        class="w-full py-2 px-4 bg-blue-600 hover:bg-blue-700 text-white font-semibold rounded shadow transition duration-150"
+      >
+        Iniciar Sesión
+      </button>
+    </form>
   </div>
+
+  <script>
+    const loginForm = document.getElementById('login-form');
+    const alertBox = document.getElementById('alert-box');
+    const submitBtn = document.getElementById('submit-btn');
+
+    loginForm.addEventListener('submit', async (e) => {
+      e.preventDefault();
+
+      const email = document.getElementById('email').value.trim();
+      const password = document.getElementById('password').value;
+
+      alertBox.classList.add('hidden');
+      submitBtn.disabled = true;
+      submitBtn.innerText = 'Cargando...';
+
+      try {
+        const response = await fetch('http://localhost:3000/api/auth/login', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ email, password })
+        });
+
+        const data = await response.json();
+
+        if (response.ok) {
+          localStorage.setItem('token', data.token);
+          localStorage.setItem('userRole', data.user.rol);
+          
+          window.location.href = data.user.rol === 'ADMIN' ? '/dashboard.html' : '/recepcion.html';
+        } else {
+          showAlert(data.message || 'Usuario o contraseña incorrectos.');
+        }
+      } catch (error) {
+        showAlert('No se pudo conectar con el servidor backend.');
+      } finally {
+        submitBtn.disabled = false;
+        submitBtn.innerText = 'Iniciar Sesión';
+      }
+    });
+
+    function showAlert(message) {
+      alertBox.innerText = message;
+      alertBox.className = 'mb-4 p-3 rounded text-sm text-center bg-red-100 text-red-700 border border-red-300';
+    }
+  </script>
 </body>
 </html>
