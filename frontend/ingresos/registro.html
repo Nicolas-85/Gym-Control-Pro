@@ -1,0 +1,149 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Recepción - Registro de Ingresos</title>
+  <script src="https://cdn.tailwindcss.com"></script>
+</head>
+<body class="bg-slate-100 min-h-screen flex flex-col items-center justify-center p-4">
+
+  <div class="w-full max-w-xl bg-white rounded-2xl shadow-xl p-8 border border-slate-200">
+    <!-- Encabezado -->
+    <div class="text-center mb-8">
+      <h1 class="text-3xl font-bold text-slate-800">Control de Acceso</h1>
+      <p class="text-slate-500 text-sm mt-1">Ingrese el número de documento y presione Enter</p>
+    </div>
+
+    <!-- Formulario de ingreso por DNI -->
+    <form id="ingresoForm" onsubmit="procesarIngreso(event)">
+      <div class="mb-6">
+        <label for="documentoInput" class="block text-sm font-semibold text-slate-700 mb-2">Número de Documento</label>
+        <input 
+          type="number" 
+          id="documentoInput" 
+          class="w-full text-center text-4xl font-extrabold tracking-wider py-4 px-4 bg-slate-50 border-2 border-slate-300 rounded-xl focus:outline-none focus:ring-4 focus:ring-blue-500 focus:border-blue-500 text-slate-800 transition"
+          placeholder="Ej: 35123456"
+          autofocus
+          required
+        />
+      </div>
+      <button type="submit" class="w-full bg-blue-600 hover:bg-blue-700 text-white font-bold py-3 px-4 rounded-xl shadow-md transition">
+        Registrar Ingreso (Enter)
+      </button>
+    </form>
+
+    <!-- Tarjeta de Resultado (Oculta por defecto) -->
+    <div id="resultadoCard" class="hidden mt-8 p-6 rounded-xl border text-center transition-all duration-300 transform scale-100">
+      <h2 id="socioNombre" class="text-2xl font-bold mb-2"></h2>
+      <p id="socioMensaje" class="text-lg font-medium"></p>
+      
+      <!-- Badges Informativos -->
+      <div class="flex justify-center gap-3 mt-4">
+        <span id="badgeEstadoSocio" class="px-3 py-1 rounded-full text-xs font-bold uppercase tracking-wider"></span>
+        <span id="badgeEstadoCuota" class="px-3 py-1 rounded-full text-xs font-bold uppercase tracking-wider"></span>
+      </div>
+    </div>
+  </div>
+
+  <script>
+    let timerLimpieza = null;
+
+    async function procesarIngreso(e) {
+      e.preventDefault();
+
+      const input = document.getElementById('documentoInput');
+      const documento = input.value.trim();
+      const resultadoCard = document.getElementById('resultadoCard');
+      const socioNombre = document.getElementById('socioNombre');
+      const socioMensaje = document.getElementById('socioMensaje');
+      const badgeEstadoSocio = document.getElementById('badgeEstadoSocio');
+      const badgeEstadoCuota = document.getElementById('badgeEstadoCuota');
+
+      if (!documento) return;
+
+      // Deshabilitar input temporalmente mientras procesa
+      input.disabled = true;
+
+      // Cancelar autolimpieza previa si ingresan muy rápido
+      if (timerLimpieza) clearTimeout(timerLimpieza);
+
+      try {
+        const token = localStorage.getItem('token'); // Recuperar token guardado en el login
+
+        const response = await fetch('http://localhost:3000/api/ingresos', {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json',
+            'Authorization': `Bearer ${token}`
+          },
+          body: JSON.stringify({ documento })
+        });
+
+        const data = await response.json();
+
+        resultadoCard.classList.remove('hidden', 'bg-emerald-100', 'border-emerald-400', 'text-emerald-900',
+                                              'bg-amber-100', 'border-amber-400', 'text-amber-900',
+                                              'bg-rose-100', 'border-rose-400', 'text-rose-900');
+        badgeEstadoSocio.className = 'px-3 py-1 rounded-full text-xs font-bold uppercase tracking-wider';
+        badgeEstadoCuota.className = 'px-3 py-1 rounded-full text-xs font-bold uppercase tracking-wider';
+
+        if (response.ok) {
+          // Socio encontrado (OK)
+          socioNombre.textContent = `${data.nombre} ${data.apellido}`;
+          socioMensaje.textContent = data.mensaje;
+
+          badgeEstadoSocio.textContent = `Socio: ${data.estadoSocio}`;
+          badgeEstadoCuota.textContent = `Cuota: ${data.estadoCuota.replace(/_/g, ' ')}`;
+
+          // Determinar color de tarjeta según estado de la cuota / socio
+          if (data.estadoCuota === 'VENCIDO' || data.estadoSocio === 'INACTIVO') {
+            // Fondo Rojo / Advertencia crítica
+            resultadoCard.classList.add('bg-rose-100', 'border-rose-400', 'text-rose-900');
+            badgeEstadoSocio.classList.add('bg-rose-200', 'text-rose-800');
+            badgeEstadoCuota.classList.add('bg-rose-200', 'text-rose-800');
+          } else if (data.estadoCuota === 'PROXIMO_A_VENCER') {
+            // Fondo Amarillo / Alerta de vencimiento cercano
+            resultadoCard.classList.add('bg-amber-100', 'border-amber-400', 'text-amber-900');
+            badgeEstadoSocio.classList.add('bg-amber-200', 'text-amber-800');
+            badgeEstadoCuota.classList.add('bg-amber-200', 'text-amber-800');
+          } else {
+            // Fondo Verde / Todo en regla
+            resultadoCard.classList.add('bg-emerald-100', 'border-emerald-400', 'text-emerald-900');
+            badgeEstadoSocio.classList.add('bg-emerald-200', 'text-emerald-800');
+            badgeEstadoCuota.classList.add('bg-emerald-200', 'text-emerald-800');
+          }
+        } else {
+          // Error (404 Socio no encontrado, 400 u otros)
+          socioNombre.textContent = "Atención";
+          socioMensaje.textContent = data.error || "No se pudo procesar el ingreso.";
+          
+          badgeEstadoSocio.textContent = "Error";
+          badgeEstadoCuota.textContent = "Búsqueda Fallida";
+
+          resultadoCard.classList.add('bg-rose-100', 'border-rose-400', 'text-rose-900');
+          badgeEstadoSocio.classList.add('bg-rose-200', 'text-rose-800');
+          badgeEstadoCuota.classList.add('bg-rose-200', 'text-rose-800');
+        }
+
+      } catch (err) {
+        console.error('Error de conexión:', err);
+        socioNombre.textContent = "Error de conexión";
+        socioMensaje.textContent = "No se pudo conectar con el servidor.";
+        resultadoCard.classList.remove('hidden');
+        resultadoCard.classList.add('bg-rose-100', 'border-rose-400', 'text-rose-900');
+      } finally {
+        // Habilitar el input nuevamente y limpiarlo
+        input.disabled = false;
+        input.value = '';
+        input.focus();
+
+        // Limpiar automáticamente el resultado en pantalla después de 4 segundos
+        timerLimpieza = setTimeout(() => {
+          resultadoCard.classList.add('hidden');
+        }, 4000);
+      }
+    }
+  </script>
+</body>
+</html>
