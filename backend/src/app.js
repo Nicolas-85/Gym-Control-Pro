@@ -9,7 +9,7 @@ app.use(cors());
 app.use(express.json());
 
 // Importación de rutas (desde src/ingresos/)
-const ingresosRoutes = require('./ingresos/ingresosRoutes');
+const ingresosRoutes = require('./ingresos/ingresos.routes');
 
 // Ruta de chequeo de estado de la API
 app.get('/api/health', (req, res) => {
