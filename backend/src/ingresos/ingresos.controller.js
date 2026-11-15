@@ -1,9 +1,8 @@
 const {registrarIngresoSocio} = require('./ingresos.service');
-// const { calcularEstadoCuota } = require('../utils/dateHelpers');
 
 const registrarIngreso = async (req, res) => {
   try {
-    const { documento } = req.body;
+    const { documento } = req.body || {};
     const usuarioId = req.usuario.id;
 
     if (!documento) {
@@ -14,7 +13,7 @@ const registrarIngreso = async (req, res) => {
     return res.status(201).json(resultado);
   } catch (error){
     if (error.statusCode){
-      return res.status(error.statusCode).json({error: error.mensaje});
+      return res.status(error.statusCode).json({error: error.message});
     }
 
     console.error('Error no controlado al registrar el ingreso: ', error);
