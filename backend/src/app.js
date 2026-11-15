@@ -21,6 +21,7 @@ app.get('/api/health', (req, res) => {
 // Registro de endpoints por módulo
 app.use('/api/auth', authRoutes);
 app.use('/api/ingresos', ingresosRoutes);
+app.use('/api/socios', sociosRoutes);
 
 const PORT = process.env.PORT || 3000;
 app.listen(PORT, () => {

@@ -9,8 +9,7 @@ const registrarSocio = async (req, res) => {
     }
 
   
-    const usuarioId = req.usuario ? req.usuario.id : 1; 
-
+    const usuarioId = req.usuario.id; 
     const nuevoSocio = await crearSocioService(req.body, usuarioId);
 
     return res.status(201).json({

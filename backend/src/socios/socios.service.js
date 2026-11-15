@@ -2,9 +2,10 @@ const prisma = require('../config/prisma');
 
 const crearSocioService = async (datosSocio, usuarioId) => {
   const { nombre, apellido, documento, telefono, email, fechaNacimiento } = datosSocio;
+  const documentoLimpio = documento.trim();
 
   const socioExistente = await prisma.socio.findUnique({
-    where: { documento }
+    where: { documento: documentoLimpio }
   });
 
   if (socioExistente) {
@@ -15,11 +16,11 @@ const crearSocioService = async (datosSocio, usuarioId) => {
 
   const nuevoSocio = await prisma.socio.create({
     data: {
-      nombre,
-      apellido,
-      documento,
-      telefono,
-      email: email || null,
+      nombre: nombre.trim(),
+      apellido: apellido.trim(),
+      documento: documentoLimpio,
+      telefono: String(telefono).trim(),
+      email: email ? email.trim() : null,
       fechaNacimiento: new Date(fechaNacimiento),
       estado: 'ACTIVO',
       creadoPorId: usuarioId
