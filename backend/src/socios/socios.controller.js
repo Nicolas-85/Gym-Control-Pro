@@ -1,4 +1,4 @@
-const { crearSocioService } = require('./socios.service');
+const { crearSocioService, darDeBajaSocioService } = require('./socios.service');
 const { validarDatosSocio } = require('./socios.validation');
 
 const registrarSocio = async (req, res) => {
@@ -7,7 +7,6 @@ const registrarSocio = async (req, res) => {
     if (errorValidacion) {
       return res.status(400).json({ error: errorValidacion });
     }
-
   
     const usuarioId = req.usuario.id; 
     const nuevoSocio = await crearSocioService(req.body, usuarioId);
@@ -24,4 +23,27 @@ const registrarSocio = async (req, res) => {
   }
 };
 
-module.exports = { registrarSocio };
+const darDeBajaSocio = async (req, res)=>{
+  try{
+    const {id} = req.params;
+    const resultado = await darDeBajaSocioService(id);
+
+    if(resultado.yaInactivo){
+      return res.status(200).json({
+        mensaje: 'El socio ya se encuentra inactivo'
+      });
+    }
+    return res.status(200).json({
+      mensaje: 'Socio desactivado exitosamente',
+      socio: resultado.socio
+    });
+  } catch (error) {
+    console.error('Error al dar de baja el socio: ', error);
+    const status = error.status || 500;
+    return res.status(status).json({
+      error: error.message || 'Error interno del servidor'
+    });
+  }  
+};
+
+module.exports = { registrarSocio, darDeBajaSocio };
