@@ -11,7 +11,6 @@ const app = express();
 // Middlewares globales
 app.use(cors());
 app.use(express.json());
-app.use('/socios', sociosRoutes);
 
 // Ruta de chequeo de estado de la API
 app.get('/api/health', (req, res) => {
