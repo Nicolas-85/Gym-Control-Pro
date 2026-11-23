@@ -30,23 +30,35 @@ const crearSocioService = async (datosSocio, usuarioId) => {
   return nuevoSocio;
 };
 
-// 2. Función para modificar un socio (TCK-007)
 const actualizarSocioService = async (id, datosActualizados) => {
+  const socioId = Number(id);
+
   const socioExistente = await prisma.socio.findUnique({
-    where: { id: Number(id) }
+    where: { id: socioId }
   });
 
   if (!socioExistente) {
-    return null; 
+    const error = new Error("Socio no encontrado");
+    error.status = 404;
+    throw error; 
   }
 
-  if (datosActualizados.documento) {
-    delete datosActualizados.documento;
+  const {nombre, apellido, telefono, email, fechaNacimiento} = datosActualizados || {};
+  const camposActualizar = {};
+  
+  if (nombre !== undefined) camposActualizar.nombre = nombre.trim();
+  if (apellido !== undefined) camposActualizar.apellido = apellido.trim();
+  if (telefono !== undefined) camposActualizar.telefono = telefono.trim();
+  if (email !== undefined) camposActualizar.email = email ? email.trim() : null;
+  if (fechaNacimiento !== undefined) camposActualizar.fechaNacimiento = new Date(fechaNacimiento);
+
+  if(Object.keys(camposActualizar).length === 0){
+    return socioExistente;
   }
 
   const socioActualizado = await prisma.socio.update({
-    where: { id: Number(id) },
-    data: datosActualizados
+    where: { id: socioId },
+    data: camposActualizar
   });
 
   return socioActualizado;
