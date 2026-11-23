@@ -30,6 +30,40 @@ const crearSocioService = async (datosSocio, usuarioId) => {
   return nuevoSocio;
 };
 
+const actualizarSocioService = async (id, datosActualizados) => {
+  const socioId = Number(id);
+
+  const socioExistente = await prisma.socio.findUnique({
+    where: { id: socioId }
+  });
+
+  if (!socioExistente) {
+    const error = new Error("Socio no encontrado");
+    error.status = 404;
+    throw error; 
+  }
+
+  const {nombre, apellido, telefono, email, fechaNacimiento} = datosActualizados || {};
+  const camposActualizar = {};
+  
+  if (nombre !== undefined) camposActualizar.nombre = nombre.trim();
+  if (apellido !== undefined) camposActualizar.apellido = apellido.trim();
+  if (telefono !== undefined) camposActualizar.telefono = telefono.trim();
+  if (email !== undefined) camposActualizar.email = email ? email.trim() : null;
+  if (fechaNacimiento !== undefined) camposActualizar.fechaNacimiento = new Date(fechaNacimiento);
+
+  if(Object.keys(camposActualizar).length === 0){
+    return socioExistente;
+  }
+
+  const socioActualizado = await prisma.socio.update({
+    where: { id: socioId },
+    data: camposActualizar
+  });
+
+  return socioActualizado;
+};
+
 const darDeBajaSocioService = async (id)=>{
   const socioId = Number(id);
 
@@ -67,4 +101,8 @@ const darDeBajaSocioService = async (id)=>{
   };
 };
 
-module.exports = { crearSocioService, darDeBajaSocioService };
+module.exports = { 
+  crearSocioService, 
+  darDeBajaSocioService,
+  actualizarSocioService 
+};

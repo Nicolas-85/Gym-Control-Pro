@@ -1,5 +1,5 @@
-const { crearSocioService, darDeBajaSocioService } = require('./socios.service');
-const { validarDatosSocio } = require('./socios.validation');
+const { crearSocioService, darDeBajaSocioService, actualizarSocioService } = require('./socios.service');
+const { validarDatosSocio, validarActualizacionSocio } = require('./socios.validation');
 
 const registrarSocio = async (req, res) => {
   try {
@@ -7,6 +7,7 @@ const registrarSocio = async (req, res) => {
     if (errorValidacion) {
       return res.status(400).json({ error: errorValidacion });
     }
+
   
     const usuarioId = req.usuario.id; 
     const nuevoSocio = await crearSocioService(req.body, usuarioId);
@@ -18,6 +19,27 @@ const registrarSocio = async (req, res) => {
 
   } catch (error) {
     console.error("Error al registrar socio:", error);
+    const status = error.status || 500;
+    return res.status(status).json({ error: error.message || "Error interno del servidor" });
+  }
+};
+
+const modificarSocio = async (req, res) => {
+  try {
+    const { id } = req.params;
+    const errorValidacion = validarActualizacionSocio(id, req.body);
+    if(errorValidacion){
+      return res.status(400).json({error: errorValidacion});
+    }
+    
+    const socioActualizado = await actualizarSocioService(id, req.body);
+
+    return res.status(200).json({
+      mensaje: "Socio actualizado exitosamente",
+      socio: socioActualizado
+    });
+  } catch (error) {
+    console.error("Error al modificar socio:", error);
     const status = error.status || 500;
     return res.status(status).json({ error: error.message || "Error interno del servidor" });
   }
@@ -46,4 +68,8 @@ const darDeBajaSocio = async (req, res)=>{
   }  
 };
 
-module.exports = { registrarSocio, darDeBajaSocio };
+module.exports = {
+  registrarSocio,
+  darDeBajaSocio,
+  modificarSocio
+};
